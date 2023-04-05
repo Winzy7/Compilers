@@ -89,6 +89,20 @@ int omerrs = 0;               /* number of erros in lexing and parsing */
 %type <program> program
 %type <classes> class_list
 %type <class_> class
+/* UNFINISHED TYPES */
+%type <boolean> 
+%type <symbol> 
+%type <feature> 
+%type <features> 
+%type <formal> 
+%type <formals> 
+%type <case_> 
+%type <cases> 
+%type <expression> 
+%type <expressions> 
+%type <error_msg>
+
+
 
 /* You will want to change the following line. */
 %type <features> dummy_feature_list
