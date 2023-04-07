@@ -78,6 +78,7 @@ int omerrs = 0;               /* number of erros in lexing and parsing */
 %token <symbol>  TYPEID 278 OBJECTID 279 
 %token ASSIGN 280 NOT 281 LE 282 ERROR 283
 
+
 /*  DON'T CHANGE ANYTHING ABOVE THIS LINE, OR YOUR PARSER WONT WORK       */
 /**************************************************************************/
  
@@ -89,56 +90,167 @@ int omerrs = 0;               /* number of erros in lexing and parsing */
 %type <program> program
 %type <classes> class_list
 %type <class_> class
-/* UNFINISHED TYPES */
-%type <boolean> 
-%type <symbol> 
-%type <feature> 
-%type <features> 
-%type <formal> 
-%type <formals> 
-%type <case_> 
-%type <cases> 
-%type <expression> 
-%type <expressions> 
-%type <error_msg>
-
-
 
 /* You will want to change the following line. */
-%type <features> dummy_feature_list
+/* %type <features> dummy_feature_list */
+%type <features> feature_list
+%type <features> features
+%type <feature> feature
+%type <expressions> expression_list
+%type <expressions> expression_block
+%type <expression> expression
+%type <expression> let_exp
+%type <expression> branch
+%type <formals> formal_list
+%type <formal> formal
+
+
+
 
 /* Precedence declarations go here. */
-
+%right ASSIGN
+%left NOT
+%nonassoc LE '<' '='
+%left '+' '-'
+%left '*' '/'
+%left ISVOID
+%left '~'
+%left '@'
+%left '.'
 
 %%
 /* 
    Save the root of the abstract syntax tree in a global variable.
 */
-program : class_list    { /* make sure bison computes location information */
-                          @$ = @1;
-                          ast_root = program($1); }
-        ;
+program     : class_list  { /* make sure bison computes location information */
+                @$ = @1;
+                ast_root = program($1); };
 
-class_list
-        : class                 /* single class */
-                { $$ = single_Classes($1);
+class_list  : class                 /* single class */
+                  { $$ = single_Classes($1);
                   parse_results = $$; }
-        | class_list class      /* several classes */
+            | class_list class      /* several classes */
                 { $$ = append_Classes($1,single_Classes($2)); 
-                  parse_results = $$; }
-        ;
+                  parse_results = $$; };
 
 /* If no parent is specified, the class inherits from the Object class. */
-class   : CLASS TYPEID '{' dummy_feature_list '}' ';'
-                { $$ = class_($2,idtable.add_string("Object"),$4,
-                              stringtable.add_string(curr_filename)); }
-        | CLASS TYPEID INHERITS TYPEID '{' dummy_feature_list '}' ';'
-                { $$ = class_($2,$4,$6,stringtable.add_string(curr_filename)); }
+class:
+        CLASS TYPEID '{' feature_list '}' ';' 
+          { $$ = class_($2, idtable.add_string("Object"), $4, stringtable.add_string(curr_filename)); }
+      | CLASS TYPEID INHERITS TYPEID '{' feature_list '}' ';' 
+          { $$ = class_($2, $4, $6, stringtable.add_string(curr_filename)); }
+      | CLASS error '{' feature_list '}' ';' 
+          { yyerrok; yyclearin; $$ = NULL; }
+      | CLASS error '{' error '}' ';' 
+          { yyerrok; yyclearin; $$ = NULL; }
+      ;
+
+/* Collection of expressions */
+expression_list : expression ';'
+                  { $$ = single_Expressions($1); }
+                | expression ',' expression_list
+                  { $$ = append_Expressions(single_Expressions($1), $3); }
+                |
+                  { yyerrok; $$ = nil_Expressions(); } 
+                ;
+
+/* Any multiline expression */
+expression_block : expression ';'
+                { $$ = single_Expressions($1); }
+            |   expression ';' expression_block 
+                { $$ = append_Expressions(single_Expressions($1), $3); }
+            ;
+
+/* Types of individual expressions */
+expression : OBJECTID
+             { $$ = object($1); }
+            | OBJECTID ASSIGN expression
+              { $$ = assign($1, $3); }
+            | '{' expression_block '}'
+              { $$ = block($2); }
+            | IF expression THEN expression ELSE expression FI
+              { $$ = cond($2, $4, $6); }
+            | ISVOID expression
+              { $$ = isvoid($2); }
+            | NOT expression
+              { $$ = comp($2); }
+            | expression '+' expression
+              { $$ = plus($1, $3); }
+            | expression '-' expression
+              { $$ = sub($1, $3); }
+            | expression '*' expression
+              { $$ = mul($1, $3); }
+            | expression '/' expression
+              { $$ = divide($1, $3); }
+            | '~' expression
+              { $$ = neg($2); }
+            | expression '<' expression
+              { $$ = lt($1, $3); }
+            | LET let_exp
+              { $$ = $2; }
+            | INT_CONST
+              { $$ = int_const($1); }
+            | BOOL_CONST
+              { $$ = bool_const($1); }
+            | STR_CONST
+              { $$ = string_const($1); }
+            | NEW TYPEID
+              { $$ = new_($2); }
+            | WHILE expression LOOP expression POOL
+              { $$ = loop($2, $4); }
+            ;
+
+/* cases are STIL IN PROGRESS */
+branch : OBJECTID ':' TYPEID DARROW expression
+              { $$ = branch($1, $3, $5);}
+            ;
+
+/* different types of let expression declarations */
+let_exp : OBJECTID ':' TYPEID ASSIGN expression IN expression
+            { $$ = let($1, $3, $5, $7); }
+          | OBJECTID ':' TYPEID IN expression 
+            { $$ = let($1, $3, no_expr(), $5); }
+          | OBJECTID ':' TYPEID ASSIGN expression ',' let_exp
+            { $$ = let($1, $3, $5, $7); }
+          ;
+
+/* Collection of formals, seperated by commas  */
+formal_list : formal
+              { $$ = single_Formals($1); }
+            | formal_list ',' formal
+              { $$ = append_Formals($1, single_Formals($3)); }
+            |
+              { $$ = nil_Formals(); }
+            ;
+
+/* These are like the params in methods */
+formal : OBJECTID ':' TYPEID 
+          { $$ = formal($1, $3); }
         ;
 
 /* Feature list may be empty, but no empty features in list. */
-dummy_feature_list:             /* empty */
-                {  $$ = nil_Features(); }
+feature_list:  features
+                { $$ = $1; }
+              |
+                {  yyerrok; $$ = nil_Features(); } 
+              ;
+
+/* Features that are seperated by semicolons like attr and methods */
+features : feature ';' 
+              { $$ = single_Features($1); }
+          | feature ';' features
+              { $$ = append_Features(single_Features($1), $3); }
+          ;
+
+/* Each individual feature (the individual attr and methods in a class) */
+feature : OBJECTID ':' TYPEID 
+            { $$ = attr($1, $3, no_expr()); }
+          | OBJECTID '(' formal_list ')' ':' TYPEID '{' expression '}'
+              { $$ = method($1, $3, $6, $8); }
+          | OBJECTID '(' formal_list ')' ':' TYPEID '{' '{' expression '}' '}'
+              { $$ = method($1, $3, $6, $9); }
+          ; 
+
 
 
 /* end of grammar */
