@@ -133,8 +133,7 @@ class_list  : class                 /* single class */
                   parse_results = $$; };
 
 /* If no parent is specified, the class inherits from the Object class. */
-class:
-        CLASS TYPEID '{' feature_list '}' ';' 
+class:  CLASS TYPEID '{' feature_list '}' ';' 
           { $$ = class_($2, idtable.add_string("Object"), $4, stringtable.add_string(curr_filename)); }
       | CLASS TYPEID INHERITS TYPEID '{' feature_list '}' ';' 
           { $$ = class_($2, $4, $6, stringtable.add_string(curr_filename)); }
@@ -187,6 +186,10 @@ expression : OBJECTID
               { $$ = mul($1, $3); }
             | expression '/' expression
               { $$ = divide($1, $3); }
+            | expression LE expression
+              { $$ = leq($1, $3); }
+            | expression '=' expression
+              { $$ = eq($1, $3); }
             | '~' expression
               { $$ = neg($2); }
             | expression '<' expression
@@ -199,6 +202,8 @@ expression : OBJECTID
               { $$ = bool_const($1); }
             | STR_CONST
               { $$ = string_const($1); }
+            | '(' NEW TYPEID ')' /* for (new Class) */
+              { $$ = new_($3); }
             | NEW TYPEID
               { $$ = new_($2); }
             | WHILE expression LOOP expression POOL
@@ -252,7 +257,9 @@ features : feature ';'
           ;
 
 /* Each individual feature (the individual attr and methods in a class) */
-feature : OBJECTID ':' TYPEID 
+feature : OBJECTID ':' TYPEID ASSIGN expression
+            { $$ = attr($1, $3, $5); }
+          | OBJECTID ':' TYPEID 
             { $$ = attr($1, $3, no_expr()); }
           | OBJECTID '(' formal_list ')' ':' TYPEID '{' expression '}'
               { $$ = method($1, $3, $6, $8); }
