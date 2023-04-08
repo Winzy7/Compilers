@@ -100,11 +100,10 @@ int omerrs = 0;               /* number of erros in lexing and parsing */
 %type <expressions> expression_block
 %type <expression> expression
 %type <expression> let_exp
-%type <expression> branch
 %type <formals> formal_list
 %type <formal> formal
-
-
+%type <case_> case /* moved branch from expression to case_ */
+%type <cases> case_list
 
 
 /* Precedence declarations go here. */
@@ -166,10 +165,16 @@ expression : OBJECTID
              { $$ = object($1); }
             | OBJECTID ASSIGN expression
               { $$ = assign($1, $3); }
+            | expression '.' OBJECTID '(' expression_list ')'
+              { $$ = dispatch($1, $3, $5); }
+            | expression '@' TYPEID '.' OBJECTID '(' expression_list ')'
+              { $$ = static_dispatch($1, $3, $5, $7); }
             | '{' expression_block '}'
               { $$ = block($2); }
             | IF expression THEN expression ELSE expression FI
               { $$ = cond($2, $4, $6); }
+            | CASE expression OF case_list ESAC /* winston case expression */
+              { $$ = typcase($2, $4); }
             | ISVOID expression
               { $$ = isvoid($2); }
             | NOT expression
@@ -201,9 +206,13 @@ expression : OBJECTID
             ;
 
 /* cases are STIL IN PROGRESS */
-branch : OBJECTID ':' TYPEID DARROW expression
+case : OBJECTID ':' TYPEID DARROW expression ';'
               { $$ = branch($1, $3, $5);}
             ;
+
+case_list  : { yyerrok; $$ = nil_Cases(); }
+       | case_list case { $$ = append_Cases($1, single_Cases($2)); }
+       ;
 
 /* different types of let expression declarations */
 let_exp : OBJECTID ':' TYPEID ASSIGN expression IN expression
@@ -250,7 +259,6 @@ feature : OBJECTID ':' TYPEID
           | OBJECTID '(' formal_list ')' ':' TYPEID '{' '{' expression '}' '}'
               { $$ = method($1, $3, $6, $9); }
           ; 
-
 
 
 /* end of grammar */
