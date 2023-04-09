@@ -122,6 +122,7 @@ int omerrs = 0;               /* number of erros in lexing and parsing */
 
 
 
+
 %%
 /* 
    Save the root of the abstract syntax tree in a global variable.
@@ -149,12 +150,10 @@ class:  CLASS TYPEID '{' feature_list '}' ';'
       ;
 
 /* Collection of expressions */
-expression_list : expression ';'
+expression_list : expression 
                   { $$ = single_Expressions($1); }
                 | expression_list ',' expression 
                   { $$ = append_Expressions($1, single_Expressions($3)); }
-                |
-                  { yyerrok; $$ = nil_Expressions(); } 
                 ;
 
 /* Any multiline expression */
@@ -172,8 +171,7 @@ case : OBJECTID ':' TYPEID DARROW expression ';'
               { $$ = branch($1, $3, $5);}
             ;
 
-case_list  : { yyerrok; $$ = nil_Cases(); }
-       | case_list case { $$ = append_Cases($1, single_Cases($2)); }
+case_list  :  case_list case { $$ = append_Cases($1, single_Cases($2)); }
        | case { $$ = single_Cases($1); }
        ;
 
@@ -193,8 +191,8 @@ let_exp : OBJECTID ':' TYPEID ASSIGN expression IN expression
 /* Collection of formals, seperated by commas  */
 formal_list : formal
               { $$ = single_Formals($1); }
-            | formal_list ',' formal
-              { $$ = append_Formals($1, single_Formals($3)); }
+            | formal ','  formal_list 
+              { $$ = append_Formals(single_Formals($1), $3); }
             |
               { $$ = nil_Formals(); }
             ;
@@ -227,12 +225,6 @@ feature : OBJECTID ':' TYPEID ASSIGN expression
             { $$ = attr($1, $3, no_expr()); }
           | OBJECTID '(' formal_list ')' ':' TYPEID '{' expression '}'
               { $$ = method($1, $3, $6, $8); }
-          | OBJECTID '(' formal_list ')' ':' TYPEID '{' '{' expression '}' '}'
-              { $$ = method($1, $3, $6, $9); }
-          | OBJECTID '(' ')' ':' TYPEID '{' '}'
-            { $$ = method($1, nil_Formals(), $5, no_expr()); }
-          | OBJECTID '(' ')' ':' TYPEID '{' expression '}'
-            { $$ = method($1, nil_Formals(), $5, $7); }
           ; 
 
 /* Types of individual expressions */
@@ -243,7 +235,7 @@ expression : OBJECTID ASSIGN expression
             | OBJECTID '(' expression_list ')'
               { $$ = dispatch(object(idtable.add_string("self")), $1, $3); }
             | OBJECTID '(' ')'
-              { $$ = dispatch(object(idtable.add_string("Object")), $1, nil_Expressions()); }
+              { $$ = dispatch(object(idtable.add_string("self")), $1, nil_Expressions()); }
 
 
             | expression '.' OBJECTID '(' expression_list ')'
@@ -251,13 +243,15 @@ expression : OBJECTID ASSIGN expression
             | expression '.' OBJECTID '(' ')'
               { $$ = dispatch($1, $3, nil_Expressions()); }
 
-
             | expression '@' TYPEID '.' OBJECTID '(' expression_list ')'
               { $$ = static_dispatch($1, $3, $5, $7); }
             | expression '@' TYPEID '.' OBJECTID '(' ')'
               { $$ = static_dispatch($1, $3, $5, nil_Expressions()); }
+
+
             | '{' expression_block '}'
               { $$ = block($2); }
+
             | IF expression THEN expression ELSE expression FI
               { $$ = cond($2, $4, $6); }
             | CASE expression OF case_list ESAC /* winston case expression */
@@ -274,6 +268,8 @@ expression : OBJECTID ASSIGN expression
               { $$ = isvoid($2); }
             | NOT expression
               { $$ = comp($2); }
+
+            /*  arithmetic */
             | expression '+' expression
               { $$ = plus($1, $3); }
             | expression '-' expression
@@ -282,14 +278,19 @@ expression : OBJECTID ASSIGN expression
               { $$ = mul($1, $3); }
             | expression '/' expression
               { $$ = divide($1, $3); }
+
+            /* comp operations */
             | expression LE expression
               { $$ = leq($1, $3); }
             | expression '=' expression
               { $$ = eq($1, $3); }
-            | '~' expression
-              { $$ = neg($2); }
             | expression '<' expression
               { $$ = lt($1, $3); }
+
+
+            | '~' expression
+              { $$ = neg($2); }
+
 
             | '(' expression ')' 
               { $$ = $2; }
@@ -321,3 +322,4 @@ void yyerror(const char *s)
 
   if(omerrs>50) {fprintf(stdout, "More than 50 errors\n"); exit(1);}
 }
+
